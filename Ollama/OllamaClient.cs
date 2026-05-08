@@ -37,6 +37,7 @@ namespace OllamaCodeCompletions
             public bool UseAuth { get; set; }
             public string Username { get; set; }
             public string Password { get; set; }
+            public IReadOnlyList<string> StopTokens { get; set; }
         }
 
         /// <summary>
@@ -51,6 +52,19 @@ namespace OllamaCodeCompletions
 
             string url = req.ServerUrl.TrimEnd('/') + "/api/generate";
 
+            // Build the stop-token array: always include the standard FIM/EOT sentinels,
+            // then append any caller-supplied tokens (e.g. "\n" for single-line mode).
+            var stopArray = new JArray
+            {
+                "<|endoftext|>", "<|fim_pad|>", "<|file_sep|>", "<EOT>",
+                "<|im_end|>", "<|im_start|>"
+            };
+            if (req.StopTokens != null)
+            {
+                foreach (string token in req.StopTokens)
+                    stopArray.Add(token);
+            }
+
             var payload = new JObject
             {
                 ["model"] = req.Model,
@@ -62,13 +76,7 @@ namespace OllamaCodeCompletions
                     ["temperature"] = 0.2,
                     ["top_p"] = 0.95,
                     ["num_predict"] = req.MaxPredict,
-                    // Common FIM/EOT stop tokens across code models. Model templates
-                    // usually handle these, but we belt-and-suspenders here.
-                    ["stop"] = new JArray
-                    {
-                        "<|endoftext|>", "<|fim_pad|>", "<|file_sep|>", "<EOT>",
-                        "<|im_end|>", "<|im_start|>"
-                    }
+                    ["stop"] = stopArray
                 }
             };
 

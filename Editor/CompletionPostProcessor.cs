@@ -12,7 +12,8 @@ namespace OllamaCodeCompletions
             string rawCompletion,
             string lineBeforeCursor,
             string lineAfterCursor,
-            string bufferAfterCursor)
+            string bufferAfterCursor,
+            int maxLines = int.MaxValue)
         {
             // 1. Null / whitespace rejection
             if (string.IsNullOrWhiteSpace(rawCompletion))
@@ -57,7 +58,35 @@ namespace OllamaCodeCompletions
             if (string.IsNullOrWhiteSpace(c))
                 return null;
 
+            // 8. Apply hard line cap.
+            c = CapLines(c, maxLines);
+
+            // Final re-check after cap (cap can leave only whitespace via trailing-newline edge cases).
+            if (string.IsNullOrWhiteSpace(c))
+                return null;
+
             return c;
+        }
+
+        /// <summary>
+        /// Truncates <paramref name="completion"/> to at most <paramref name="maxLines"/> lines.
+        /// Line endings are normalised to \n on input/output (VS normalises on save anyway).
+        /// </summary>
+        public static string CapLines(string completion, int maxLines)
+        {
+            if (string.IsNullOrEmpty(completion) || maxLines <= 0)
+                return completion;
+
+            // Normalise \r\n → \n so the split is uniform.
+            string normalised = completion.Replace("\r\n", "\n").Replace("\r", "\n");
+            string[] lines = normalised.Split('\n');
+
+            if (lines.Length <= maxLines)
+                return completion; // unchanged — preserve original line endings
+
+            // Join the first maxLines lines with \n and trim any trailing whitespace.
+            string capped = string.Join("\n", lines, 0, maxLines).TrimEnd();
+            return capped;
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────

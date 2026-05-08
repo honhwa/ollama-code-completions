@@ -3,8 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:local="clr-namespace:OllamaCodeCompletions"
              mc:Ignorable="d"
              d:DesignWidth="540" d:DesignHeight="640">
+    <UserControl.Resources>
+        <ObjectDataProvider x:Key="MultilineModeValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="local:MultilineMode"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+    </UserControl.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="8">
 
@@ -79,6 +89,8 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="180"/>
@@ -93,20 +105,29 @@
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
                              Text="{Binding DebounceMs, UpdateSourceTrigger=LostFocus}"/>
 
-                    <Label Grid.Row="2" Grid.Column="0" Content="Max prefix characters:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
+                    <Label Grid.Row="2" Grid.Column="0" Content="Multi-line completions:" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="MultilineModeComboBox" Grid.Row="2" Grid.Column="1" Margin="0,4" Width="120" HorizontalAlignment="Left"
+                              ItemsSource="{Binding Source={StaticResource MultilineModeValues}}"
+                              SelectedItem="{Binding MultilineMode, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="Max completion lines:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
+                             Text="{Binding MaxCompletionLines, UpdateSourceTrigger=LostFocus}"/>
+
+                    <Label Grid.Row="4" Grid.Column="0" Content="Max prefix characters:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
                              Text="{Binding MaxPrefixChars, UpdateSourceTrigger=LostFocus}"/>
 
-                    <Label Grid.Row="3" Grid.Column="0" Content="Max suffix characters:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
+                    <Label Grid.Row="5" Grid.Column="0" Content="Max suffix characters:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
                              Text="{Binding MaxSuffixChars, UpdateSourceTrigger=LostFocus}"/>
 
-                    <Label Grid.Row="4" Grid.Column="0" Content="Max tokens to predict:" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
+                    <Label Grid.Row="6" Grid.Column="0" Content="Max tokens to predict:" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
                              Text="{Binding MaxPredict, UpdateSourceTrigger=LostFocus}"/>
 
-                    <Label Grid.Row="5" Grid.Column="0" Content="Request timeout (s):" VerticalAlignment="Center"/>
-                    <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
+                    <Label Grid.Row="7" Grid.Column="0" Content="Request timeout (s):" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="7" Grid.Column="1" Margin="0,4" Width="100" HorizontalAlignment="Left"
                              Text="{Binding TimeoutSeconds, UpdateSourceTrigger=LostFocus}"/>
                 </Grid>
             </GroupBox>

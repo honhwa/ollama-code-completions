@@ -29,7 +29,8 @@ def quicksort(arr):
 - **Debounced** — ~300 ms by default; in-flight requests are cancelled the moment you keep typing.
 - **Instant cache replay** — backspacing over a recent suggestion or typing the first character of one re-shows it immediately from an in-memory LRU cache, with no network call and no debounce delay.
 - **File-path prompt header** — the file's solution-relative path is prepended as a comment (`// File: src/Services/UserService.cs`) so the model knows the language and can pick up project conventions from directory names.
-- **Output post-processing** — raw FIM output is cleaned before display: leading newlines on fresh lines are stripped, mid-line completions are truncated to one line, suffix overlap with existing buffer text is removed, unbalanced brackets are truncated, and echoed prefix text is stripped.
+- **Output post-processing** — raw FIM output is cleaned before display: leading newlines on fresh lines are stripped, mid-line completions are truncated to one line, suffix overlap with existing buffer text is removed, unbalanced brackets are truncated, echoed prefix text is stripped, and a configurable line cap is applied.
+- **Smart multi-line control** — a built-in classifier decides whether to request a single-line or multi-line completion based on the context (comment, block opener, blank line, etc.). Overridable via the _Multi-line completions_ setting.
 - **Inline ghost text** — multi-line suggestions render in a faded color directly in the editor, aligned with your code's font.
 - **Tab to accept, Esc to dismiss** — only intercepted when a suggestion is actually showing.
 - **HTTP Basic auth** — for self-hosted instances behind a reverse proxy (nginx, Caddy, Traefik, Cloudflare Access).
@@ -83,6 +84,8 @@ Open **Tools → Options → Ollama Code Completions → General**.
 | Authentication | Password                      | _(empty)_                | Stored in Windows Credential Manager. Shown as `********` once set. |
 | Behavior       | Enabled                       | `true`                   | Global kill-switch.                                                 |
 | Behavior       | Debounce delay (ms)           | `300`                    | Idle time after the last keystroke before a request fires.          |
+| Behavior       | Multi-line completions        | `Auto`                   | `Auto` chooses single-line for comments and string values, multi-line for block openers and blank lines, default single-line otherwise. `Always` never restricts. `Never` always single-line. |
+| Behavior       | Max completion lines          | `6`                      | Hard ceiling on lines per suggestion, applied after all other filters. Only meaningful when multi-line is allowed. |
 | Behavior       | Max prefix characters         | `4096`                   | Context before the cursor.                                          |
 | Behavior       | Max suffix characters         | `1024`                   | Context after the cursor.                                           |
 | Behavior       | Max tokens to predict         | `128`                    | Hard ceiling per suggestion (`num_predict`).                        |
@@ -194,7 +197,8 @@ OllamaCopilot/
 │   ├── CommandFilter.cs               Tab/Esc interception
 │   ├── CommandFilterProvider.cs       MEF: chains the filter into IVsTextView
 │   ├── GhostTextLineTransformSource.cs  Extra vertical space for multi-line ghost text
-│   ├── CompletionPostProcessor.cs     Cleans raw FIM output (7-stage pipeline)
+│   ├── CompletionPostProcessor.cs     Cleans raw FIM output (8-stage pipeline, incl. line cap)
+│   ├── MultilineDecider.cs            Classifies context → single-line or multi-line decision
 │   └── CompletionCache.cs             Per-view bounded LRU cache (prefix, suffix) → completion
 │
 ├── Ollama/

@@ -21,6 +21,8 @@ namespace OllamaCodeCompletions
     /// the unbound <see cref="OptionsPageControl.PasswordBox"/> on activate and
     /// saved back on apply (see <see cref="OptionsPageControl"/>).
     /// </summary>
+    public enum MultilineMode { Auto, Always, Never }
+
     [Guid("a7e2f8b3-9c14-4f2d-8e6b-1f5d3c9a8e72")]
     [ComVisible(true)]
     public class OptionsPage : UIElementDialogPage
@@ -105,6 +107,16 @@ namespace OllamaCodeCompletions
         [DisplayName("Request timeout (seconds)")]
         [Description("HTTP timeout for each Ollama request.")]
         public int TimeoutSeconds { get; set; } = 30;
+
+        [Category(CategoryBehavior)]
+        [DisplayName("Multi-line completions")]
+        [Description("Auto: allow multi-line in code contexts, single-line in comments/strings. Always: never restrict. Never: always single-line.")]
+        public MultilineMode MultilineMode { get; set; } = MultilineMode.Auto;
+
+        [Category(CategoryBehavior)]
+        [DisplayName("Max completion lines")]
+        [Description("Hard ceiling on the number of lines a single completion can produce, applied after all other filters. Default 6.")]
+        public int MaxCompletionLines { get; set; } = 6;
 
         // --- Diagnostics ---
         // Backing fields hold the persisted state; setters mirror to Logger so it

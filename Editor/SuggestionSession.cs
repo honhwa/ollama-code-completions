@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Formatting;
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -194,7 +195,18 @@ namespace OllamaCodeCompletions
             if (!string.IsNullOrEmpty(fileHeader))
                 prefix = fileHeader + prefix;
 
-            Logger.Log("Request", $"caret={caret} prefix={prefix.Length}ch suffix={suffix.Length}ch model={opts.Model}");
+            // Classify context to decide single-line vs multi-line.
+            string contentType = _view.TextBuffer.ContentType?.TypeName?.ToLowerInvariant() ?? "";
+            var (decision, source) = MultilineDecider.Decide(opts.MultilineMode, lineBeforeCursor, contentType);
+            Logger.Log("MultilineDecision", $"{decision} ({source})");
+
+            var stopTokens = new List<string> { "\n\n\n" };
+            if (decision == MultilineDecision.Single)
+                stopTokens.Add("\n");
+
+            int effectiveMaxLines = decision == MultilineDecision.Single ? 1 : opts.MaxCompletionLines;
+
+            Logger.Log("Request", $"caret={caret} prefix={prefix.Length}ch suffix={suffix.Length}ch model={opts.Model} maxLines={effectiveMaxLines}");
 
             // Cache check — we may have arrived here via the debounce timer after the
             // synchronous check in OnTextBufferChanged already missed; check again in case
@@ -239,6 +251,7 @@ namespace OllamaCodeCompletions
                     UseAuth = opts.UseAuthentication,
                     Username = username,
                     Password = password,
+                    StopTokens = stopTokens,
                 }, ct).ConfigureAwait(false);
             }
             finally
@@ -249,7 +262,7 @@ namespace OllamaCodeCompletions
             ct.ThrowIfCancellationRequested();
             // Post-process on the background thread — pure CPU work, no UI access needed.
             int rawLen = completion?.Length ?? 0;
-            completion = CompletionPostProcessor.Clean(completion, lineBeforeCursor, lineAfterCursor, suffix);
+            completion = CompletionPostProcessor.Clean(completion, lineBeforeCursor, lineAfterCursor, suffix, effectiveMaxLines);
             Logger.Log("PostProcess", $"in={rawLen}ch out={completion?.Length ?? 0}ch");
             if (completion == null) return;
 
