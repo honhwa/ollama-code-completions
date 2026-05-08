@@ -55,6 +55,7 @@ namespace OllamaCodeCompletions
         private IAdornmentLayer _layer;
         private string _suggestion;          // raw text returned by Ollama (may be multi-line)
         private ITrackingPoint _anchor;      // tracks the cursor position the suggestion is for
+        private ITextSnapshot _suggestionSnapshot; // snapshot at which the suggestion was rendered
         private InsertionMode _insertionMode;
         private bool _suppressBufferEvent;   // set while applying our own edits
         private string _lastSeenModel;       // for detecting model changes that require a cache clear
@@ -85,8 +86,11 @@ namespace OllamaCodeCompletions
         {
             if (_suppressBufferEvent) return;
 
-            // Any user edit invalidates whatever suggestion was on screen.
-            DismissSuggestion();
+            // Always dismiss first — any buffer change (user typing, lightbulb,
+            // refactoring, formatter) invalidates the current suggestion. Dismissal
+            // fires SuggestionStateChanged synchronously so the tagger invalidates
+            // before the editor's next layout pass.
+            DismissSuggestion("buffer changed");
 
             if (!IsExtensionEnabled()) return;
 
@@ -104,12 +108,12 @@ namespace OllamaCodeCompletions
 
         private void OnCaretPositionChanged(object sender, CaretPositionChangedEventArgs e)
         {
-            if (!HasActiveSuggestion || _anchor == null) return;
-
-            // If the caret moved off the anchor (other than by our own accept), drop the suggestion.
-            int anchorPos = _anchor.GetPosition(_view.TextSnapshot);
-            int caretPos = e.NewPosition.BufferPosition.Position;
-            if (anchorPos != caretPos) DismissSuggestion();
+            // Any caret movement while a suggestion is showing dismisses it. This
+            // eliminates "ghost text in wrong place" artifacts from arrow keys, mouse
+            // clicks, and programmatic moves. Selection is mutually exclusive with
+            // accepting anyway, so the aggressive dismiss is safe.
+            if (!HasActiveSuggestion) return;
+            DismissSuggestion("caret moved");
         }
 
         private void OnLayoutChanged(object sender, TextViewLayoutChangedEventArgs e)
@@ -120,6 +124,7 @@ namespace OllamaCodeCompletions
         private void OnClosed(object sender, EventArgs e)
         {
             _cts?.Cancel();
+            DismissSuggestion("view closed");
             _view.TextBuffer.Changed -= OnTextBufferChanged;
             _view.Caret.PositionChanged -= OnCaretPositionChanged;
             _view.LayoutChanged -= OnLayoutChanged;
@@ -264,6 +269,7 @@ namespace OllamaCodeCompletions
         {
             _suggestion = text;
             _anchor = anchor;
+            _suggestionSnapshot = _view.TextSnapshot;
 
             // Determine whether the cursor is mid-line so accept knows whether to replace
             // the rest of the line or insert at the cursor.
@@ -300,22 +306,20 @@ namespace OllamaCodeCompletions
 
         private SnapshotSpan? ComputeAffectedSpan()
         {
-            if (_anchor == null) return null;
+            if (_anchor == null || _suggestionSnapshot == null) return null;
             try
             {
-                ITextSnapshot snapshot = _view.TextSnapshot;
-                int pos = _anchor.GetPosition(snapshot);
-                ITextSnapshotLine line = snapshot.GetLineFromPosition(pos);
-                return new SnapshotSpan(snapshot, pos, line.End.Position - pos);
+                // Use _suggestionSnapshot (the snapshot at render time) so the
+                // invalidation span is in the same coordinate space as the emitted
+                // tag. Covering the whole line (not just cursor→end) is cheap and
+                // prevents the editor from missing the update when snapshots skew.
+                int pos = _anchor.GetPosition(_suggestionSnapshot);
+                ITextSnapshotLine line = _suggestionSnapshot.GetLineFromPosition(pos);
+                return new SnapshotSpan(_suggestionSnapshot, line.Start.Position,
+                                        line.End.Position - line.Start.Position);
             }
-            catch (ArgumentException ex)
+            catch
             {
-                Logger.LogException("Render", ex);
-                return null;
-            }
-            catch (InvalidOperationException ex)
-            {
-                Logger.LogException("Render", ex);
                 return null;
             }
         }
@@ -432,9 +436,15 @@ namespace OllamaCodeCompletions
             }
         }
 
-        public void DismissSuggestion()
+        public void DismissSuggestion(string reason = null)
         {
-            // Compute affected span before clearing state — _anchor is needed.
+            if (!HasActiveSuggestion) return;
+            Logger.Log("Dismiss", reason ?? "(unspecified)");
+
+            // Capture span BEFORE clearing state. ComputeAffectedSpan uses
+            // _suggestionSnapshot so the invalidation is in the same coordinate
+            // space as the tag that was emitted — critical when the buffer has
+            // already advanced to a new snapshot by the time we dismiss.
             SnapshotSpan? affectedSpan = ComputeAffectedSpan();
 
             int prevExtraLineCount = _extraLineCount;
@@ -442,6 +452,7 @@ namespace OllamaCodeCompletions
 
             _suggestion = null;
             _anchor = null;
+            _suggestionSnapshot = null;
             _insertionMode = InsertionMode.InsertAtCursor;
             _extraLineCount = 0;
             _layer?.RemoveAllAdornments();

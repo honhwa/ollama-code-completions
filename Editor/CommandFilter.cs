@@ -62,7 +62,7 @@ namespace OllamaCodeCompletions
                     }
                     else if (id == VSConstants.VSStd2KCmdID.CANCEL)
                     {
-                        session.DismissSuggestion();
+                        session.DismissSuggestion("esc pressed");
                         Logger.Log("Command", "ESC dismissed");
                         return VSConstants.S_OK;
                     }
@@ -70,7 +70,7 @@ namespace OllamaCodeCompletions
                     {
                         // Pressing Enter while a ghost is showing should drop it
                         // and let the editor handle the newline normally.
-                        session.DismissSuggestion();
+                        session.DismissSuggestion("return pressed");
                         Logger.Log("Command", "RETURN dismissed");
                         // fall through
                     }

@@ -59,16 +59,21 @@ namespace OllamaCodeCompletions
 
         private void OnSuggestionStateChanged(object sender, SuggestionStateChangedEventArgs e)
         {
-            ITextSnapshot snapshot = _view.TextSnapshot;
+            ITextSnapshot current = _view.TextSnapshot;
             SnapshotSpan? span = e.AffectedSpan;
             if (span.HasValue)
             {
-                TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(span.Value));
+                // The affected span may be in an older snapshot (_suggestionSnapshot at
+                // render time). Translate to the current snapshot so TagsChanged covers
+                // the correct area for the editor's re-query.
+                SnapshotSpan translated = span.Value.Snapshot == current
+                    ? span.Value
+                    : span.Value.TranslateTo(current, SpanTrackingMode.EdgeInclusive);
+                TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(translated));
             }
             else
             {
-                var fullSpan = new SnapshotSpan(snapshot, 0, snapshot.Length);
-                TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(fullSpan));
+                TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(new SnapshotSpan(current, 0, current.Length)));
             }
         }
 
