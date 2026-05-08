@@ -54,6 +54,9 @@ namespace OllamaCodeCompletions
         private CancellationTokenSource _cts;
         private IAdornmentLayer _layer;
         private string _suggestion;          // raw text returned by Ollama (may be multi-line)
+        // INVARIANT: _anchor and _suggestionSnapshot are always set together in
+        // ShowSuggestion and cleared together in DismissSuggestion. If you add
+        // another assignment site, maintain this invariant.
         private ITrackingPoint _anchor;      // tracks the cursor position the suggestion is for
         private ITextSnapshot _suggestionSnapshot; // snapshot at which the suggestion was rendered
         private InsertionMode _insertionMode;
@@ -108,10 +111,12 @@ namespace OllamaCodeCompletions
 
         private void OnCaretPositionChanged(object sender, CaretPositionChangedEventArgs e)
         {
-            // Any caret movement while a suggestion is showing dismisses it. This
-            // eliminates "ghost text in wrong place" artifacts from arrow keys, mouse
-            // clicks, and programmatic moves. Selection is mutually exclusive with
-            // accepting anyway, so the aggressive dismiss is safe.
+            // Dismisses on ANY caret movement while a suggestion is active.
+            // This is broader than strictly necessary but eliminates a class of
+            // "ghost text in the wrong place" bugs. Safe with respect to accept:
+            // AcceptSuggestion calls DismissSuggestion before applying the edit,
+            // so by the time the caret moves to the new end position, there's
+            // nothing left to dismiss and the early-return path is taken.
             if (!HasActiveSuggestion) return;
             DismissSuggestion("caret moved");
         }
@@ -318,8 +323,14 @@ namespace OllamaCodeCompletions
                 return new SnapshotSpan(_suggestionSnapshot, line.Start.Position,
                                         line.End.Position - line.Start.Position);
             }
-            catch
+            catch (ArgumentException ex)
             {
+                Logger.LogException("ComputeAffectedSpan", ex);
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Logger.LogException("ComputeAffectedSpan", ex);
                 return null;
             }
         }
@@ -438,8 +449,8 @@ namespace OllamaCodeCompletions
 
         public void DismissSuggestion(string reason = null)
         {
-            if (!HasActiveSuggestion) return;
-            Logger.Log("Dismiss", reason ?? "(unspecified)");
+            bool wasActive = HasActiveSuggestion;
+            if (wasActive) Logger.Log("Dismiss", reason ?? "(unspecified)");
 
             // Capture span BEFORE clearing state. ComputeAffectedSpan uses
             // _suggestionSnapshot so the invalidation is in the same coordinate
