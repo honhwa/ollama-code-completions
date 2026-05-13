@@ -98,14 +98,8 @@ namespace OllamaCodeCompletions
 
             if (!IsExtensionEnabled()) return;
 
-            // Cancel any in-flight request.
+            // Cancel any in-flight request and start a new debounced one.
             _cts?.Cancel();
-            _cts = null;
-
-            // Fast path: serve instantly from cache — no debounce, no network call.
-            if (TryShowFromCache()) return;
-
-            // Cache miss — start a debounced Ollama request.
             _cts = new CancellationTokenSource();
             _ = ScheduleAsync(SafeGetDebounceMs(), _cts.Token);
         }
@@ -208,9 +202,7 @@ namespace OllamaCodeCompletions
 
             Logger.Log("Request", $"caret={caret} prefix={prefix.Length}ch suffix={suffix.Length}ch model={opts.Model} maxLines={effectiveMaxLines}");
 
-            // Cache check — we may have arrived here via the debounce timer after the
-            // synchronous check in OnTextBufferChanged already missed; check again in case
-            // something was stored in the interim.
+            // Cache check — serve from cache if possible to avoid a network round-trip.
             string cachedExact = _cache.TryGetExact(prefix, suffix);
             if (cachedExact != null)
             {
@@ -597,48 +589,6 @@ namespace OllamaCodeCompletions
 
         // ---------------------- cache helpers ----------------------
 
-        /// <summary>
-        /// Tries to serve a completion from the cache synchronously on the UI thread.
-        /// Returns true (and renders immediately) on a cache hit; false on a miss.
-        /// </summary>
-        private bool TryShowFromCache()
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            if (_view.IsClosed) return false;
-
-            OptionsPage opts = TryGetOptions();
-            if (opts == null || !opts.Enabled) return false;
-
-            CheckModelChange(opts);
-
-            ITextSnapshot snapshot = _view.TextSnapshot;
-            int caret = _view.Caret.Position.BufferPosition.Position;
-            int prefixStart = Math.Max(0, caret - Math.Max(0, opts.MaxPrefixChars));
-            int suffixEnd = Math.Min(snapshot.Length, caret + Math.Max(0, opts.MaxSuffixChars));
-            string prefix = snapshot.GetText(prefixStart, caret - prefixStart);
-            string suffix = snapshot.GetText(caret, suffixEnd - caret);
-
-            // Match the header prepended by RequestSuggestionAsync so cache keys align.
-            string fileHeader = FileHeaderBuilder.TryBuildFileHeader(_view);
-            if (!string.IsNullOrEmpty(fileHeader))
-                prefix = fileHeader + prefix;
-
-            string cachedExact = _cache.TryGetExact(prefix, suffix);
-            string cached = cachedExact;
-            string hitKind = "exact";
-            if (cached == null)
-            {
-                cached = _cache.TryGetByExtension(prefix, suffix);
-                hitKind = "extension";
-            }
-            if (cached == null) return false;
-
-            Logger.Log("Cache", $"HIT ({hitKind}) [sync]");
-            ITrackingPoint anchor = snapshot.CreateTrackingPoint(caret, PointTrackingMode.Negative);
-            ShowSuggestion(anchor, cached);
-            return true;
-        }
-
         /// <summary>Clears the cache when the model has changed since the last request.</summary>
         private void CheckModelChange(OptionsPage opts)
         {
@@ -691,7 +641,7 @@ namespace OllamaCodeCompletions
         private static int SafeGetDebounceMs()
         {
             var o = TryGetOptions();
-            int ms = o?.DebounceMs ?? 300;
+            int ms = o?.DebounceMs ?? 1000;
             return Math.Max(0, ms);
         }
 

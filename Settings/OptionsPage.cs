@@ -85,8 +85,8 @@ namespace OllamaCodeCompletions
 
         [Category(CategoryBehavior)]
         [DisplayName("Debounce delay (ms)")]
-        [Description("Idle time after the last keystroke before requesting a suggestion. Default: 300 ms.")]
-        public int DebounceMs { get; set; } = 300;
+        [Description("Idle time after the last keystroke before requesting a suggestion. Default: 1000 ms.")]
+        public int DebounceMs { get; set; } = 1000;
 
         [Category(CategoryBehavior)]
         [DisplayName("Max prefix characters")]
